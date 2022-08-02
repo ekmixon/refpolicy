@@ -46,34 +46,34 @@ class Packet:
 def print_nft_secmarks(packets,mls,mcs):
 	line = '\tsecmark default_input_packet {\n\t\t"system_u:object_r:'+DEFAULT_INPUT_PACKET
 	if mcs:
-		line += ":"+DEFAULT_MCS
+		line += f":{DEFAULT_MCS}"
 	elif mls:
-		line += ":"+DEFAULT_MLS
+		line += f":{DEFAULT_MLS}"
 	line += '"\n\t}\n\tsecmark default_output_packet {\n\t\t"system_u:object_r:'+DEFAULT_OUTPUT_PACKET
 	if mcs:
-		line += ":"+DEFAULT_MCS
+		line += f":{DEFAULT_MCS}"
 	elif mls:
-		line += ":"+DEFAULT_MLS
+		line += f":{DEFAULT_MLS}"
 	line += '"\n\t}'
 	print(line)
 	line = '\tsecmark icmp_packet {\n\t\t"system_u:object_r:'+ICMP_PACKET
 	if mcs:
-		line += ":"+DEFAULT_MCS
+		line += f":{DEFAULT_MCS}"
 	elif mls:
-		line += ":"+DEFAULT_MLS
+		line += f":{DEFAULT_MLS}"
 	line += '"\n\t}'
 	print(line)
 	for i in packets:
 		line = "\tsecmark "+i.prefix+'_input {\n\t\t"system_u:object_r:'+i.prefix+PACKET_INPUT
 		if mcs:
-			line += ":"+DEFAULT_MCS
+			line += f":{DEFAULT_MCS}"
 		elif mls:
-			line += ":"+DEFAULT_MLS
+			line += f":{DEFAULT_MLS}"
 		line += '"\n\t}\n\tsecmark '+i.prefix+'_output {\n\t\t"system_u:object_r:'+i.prefix+PACKET_OUTPUT
 		if mcs:
-			line += ":"+DEFAULT_MCS
+			line += f":{DEFAULT_MCS}"
 		elif mls:
-			line += ":"+DEFAULT_MLS
+			line += f":{DEFAULT_MLS}"
 		line += '"\n\t}'
 		print(line)
 
@@ -85,69 +85,89 @@ def print_nft_rules(packets,mls,mcs,direction):
 	print('\t\tip6 nexthdr icmpv6 meta secmark set "icmp_packet"')
 
 def print_input_rules(packets,mls,mcs):
-	line = "base -A selinux_new_input -j SECMARK --selctx system_u:object_r:"+DEFAULT_INPUT_PACKET
+	line = f"base -A selinux_new_input -j SECMARK --selctx system_u:object_r:{DEFAULT_INPUT_PACKET}"
+
 	if mls:
-		line += ":"+DEFAULT_MLS
+		line += f":{DEFAULT_MLS}"
 	elif mcs:
-		line += ":"+DEFAULT_MCS
+		line += f":{DEFAULT_MCS}"
 
 	print(line)
 
-	line = "base -A selinux_new_input -p icmp -j SECMARK --selctx system_u:object_r:"+ICMP_PACKET
+	line = f"base -A selinux_new_input -p icmp -j SECMARK --selctx system_u:object_r:{ICMP_PACKET}"
+
 	if mls:
-		line += ":"+DEFAULT_MLS
+		line += f":{DEFAULT_MLS}"
 	elif mcs:
-		line += ":"+DEFAULT_MCS
+		line += f":{DEFAULT_MCS}"
 	print(line)
 
-	line = "base -A selinux_new_input -p icmpv6 -j SECMARK --selctx system_u:object_r:"+ICMP_PACKET
+	line = f"base -A selinux_new_input -p icmpv6 -j SECMARK --selctx system_u:object_r:{ICMP_PACKET}"
+
 	if mls:
-		line += ":"+DEFAULT_MLS
+		line += f":{DEFAULT_MLS}"
 	elif mcs:
-		line += ":"+DEFAULT_MCS
+		line += f":{DEFAULT_MCS}"
 	print(line)
 
 	for i in packets:
 		for j in i.ports:
-			line="base -A selinux_new_input -p "+j.proto+" --dport "+re.sub('-', ':', j.num)+" -j SECMARK --selctx system_u:object_r:"+i.prefix+PACKET_INPUT
+			line = (
+				f"base -A selinux_new_input -p {j.proto} --dport "
+				+ re.sub('-', ':', j.num)
+				+ " -j SECMARK --selctx system_u:object_r:"
+				+ i.prefix
+				+ PACKET_INPUT
+			)
+
 			if mls:
-				line += ":"+j.mls_sens
+				line += f":{j.mls_sens}"
 			elif mcs:
-				line += ":"+j.mcs_cats
+				line += f":{j.mcs_cats}"
 			print(line)
 
 	print("post -A selinux_new_input -j CONNSECMARK --save")
 	print("post -A selinux_new_input -j RETURN")
 
 def print_output_rules(packets,mls,mcs):
-	line = "base -A selinux_new_output -j SECMARK --selctx system_u:object_r:"+DEFAULT_OUTPUT_PACKET
+	line = f"base -A selinux_new_output -j SECMARK --selctx system_u:object_r:{DEFAULT_OUTPUT_PACKET}"
+
 	if mls:
-		line += ":"+DEFAULT_MLS
+		line += f":{DEFAULT_MLS}"
 	elif mcs:
-		line += ":"+DEFAULT_MCS
+		line += f":{DEFAULT_MCS}"
 	print(line)
 
-	line = "base -A selinux_new_output -p icmp -j SECMARK --selctx system_u:object_r:"+ICMP_PACKET
+	line = f"base -A selinux_new_output -p icmp -j SECMARK --selctx system_u:object_r:{ICMP_PACKET}"
+
 	if mls:
-		line += ":"+DEFAULT_MLS
+		line += f":{DEFAULT_MLS}"
 	elif mcs:
-		line += ":"+DEFAULT_MCS
+		line += f":{DEFAULT_MCS}"
 	print(line)
 
-	line = "base -A selinux_new_output -p icmpv6 -j SECMARK --selctx system_u:object_r:"+ICMP_PACKET
+	line = f"base -A selinux_new_output -p icmpv6 -j SECMARK --selctx system_u:object_r:{ICMP_PACKET}"
+
 	if mls:
-		line += ":"+DEFAULT_MLS
+		line += f":{DEFAULT_MLS}"
 	elif mcs:
-		line += ":"+DEFAULT_MCS
+		line += f":{DEFAULT_MCS}"
 	print(line)
 
 	for i in packets:
 		for j in i.ports:
-			line = "base -A selinux_new_output -p "+j.proto+" --dport "+re.sub('-', ':', j.num)+" -j SECMARK --selctx system_u:object_r:"+i.prefix+PACKET_OUTPUT
+			line = (
+				f"base -A selinux_new_output -p {j.proto} --dport "
+				+ re.sub('-', ':', j.num)
+				+ " -j SECMARK --selctx system_u:object_r:"
+				+ i.prefix
+				+ PACKET_OUTPUT
+			)
+
 			if mls:
-				line += ":"+j.mls_sens
+				line += f":{j.mls_sens}"
 			elif mcs:
-				line += ":"+j.mcs_cats
+				line += f":{j.mcs_cats}"
 			print(line)
 
 	print("post -A selinux_new_output -j CONNSECMARK --save")
@@ -156,34 +176,31 @@ def print_output_rules(packets,mls,mcs):
 def parse_corenet(file_name):
 	packets = []
 
-	corenet_te_in = open(file_name, "r")
+	with open(file_name, "r") as corenet_te_in:
+		while True:
+			corenet_line = corenet_te_in.readline()
 
-	while True:
-		corenet_line = corenet_te_in.readline()
+			# If EOF has been reached:
+			if not corenet_line:
+				break
 
-		# If EOF has been reached:
-		if not corenet_line:
-			break
+			if NETPORT.match(corenet_line):
+				corenet_line = corenet_line.strip()
 
-		if NETPORT.match(corenet_line):
-			corenet_line = corenet_line.strip()
+				# parse out the parameters
+				openparen = corenet_line.find('(')+1
+				closeparen = corenet_line.find(')',openparen)
+				parms = re.split(r'[^-a-zA-Z0-9_]+',corenet_line[openparen:closeparen])
+				name = parms[0]
+				del parms[0]
 
-			# parse out the parameters
-			openparen = corenet_line.find('(')+1
-			closeparen = corenet_line.find(')',openparen)
-			parms = re.split(r'[^-a-zA-Z0-9_]+',corenet_line[openparen:closeparen])
-			name = parms[0]
-			del parms[0]
+				ports = []
+				while len(parms) > 0:
+					# add a port combination.
+					ports.append(Port(parms[0],parms[1],parms[2]))
+					del parms[:3]
 
-			ports = []
-			while len(parms) > 0:
-				# add a port combination.
-				ports.append(Port(parms[0],parms[1],parms[2]))
-				del parms[:3]
-
-			packets.append(Packet(name,ports))
-
-	corenet_te_in.close()
+				packets.append(Packet(name,ports))
 
 	return packets
 

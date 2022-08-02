@@ -78,9 +78,8 @@ class Template:
         self.parse_string(filename)
 
   def parse_file(self, filename):
-    file = open(filename, 'r')
-    self.parse(file)
-    file.close()
+    with open(filename, 'r') as file:
+      self.parse(file)
 
   def parse_string(self, template):
     if sys.version_info >= (3,0):
@@ -98,9 +97,7 @@ class Template:
     self.tree = TopLevelTemplateNode(self)
 
   def parser_get(self):
-    if self.line == '':
-      return None
-    return self.line
+    return None if self.line == '' else self.line
 
   def parser_eat(self, chars):
     self.lineno = self.lineno + self.line[:chars].count("\n")
@@ -110,9 +107,8 @@ class Template:
     raise ParserException(self.lineno, s)
 
   def execute_file(self, filename, data):
-    file = open(filename, 'w')
-    self.execute(file, data)
-    file.close()
+    with open(filename, 'w') as file:
+      self.execute(file, data)
 
   def execute_string(self, data):
     s = io.StringIO()
@@ -148,17 +144,17 @@ class TemplateNode:
       self.node_list.append(node)
     else:
       raise self.parent.parser_exception(
-        "[[%s]] does not have a matching [[end]]" % self.s)
+          f"[[{self.s}]] does not have a matching [[end]]")
 
   def execute(self, stream, data):
     for node in self.node_list:
       node.execute(stream, data)
 
   def __repr__(self):
-    r = "<" + self.__class__.__name__ + " "
+    r = f"<{self.__class__.__name__} "
     for i in self.node_list:
       r = r + repr(i)
-    r = r + ">"
+    r = f"{r}>"
     return r
 
 class TopLevelTemplateNode(TemplateNode):
@@ -175,22 +171,16 @@ class ForTemplateNode(TemplateNode):
   def __init__(self, parent, s):
     TemplateNode.__init__(self, parent, s)
     match = re_for_loop.match(s)
-    if match == None:
+    if match is None:
       raise self.parent.parser_exception(
-        "[[%s]] is not a valid for-loop expression" % self.s)
-    else:
-      self.vars_temp = match.group(1).split(",")
-      self.vars = []
-      for v in self.vars_temp:
-        self.vars.append(v.strip())
-      #print self.vars
-      self.expression = match.group(2)
+          f"[[{self.s}]] is not a valid for-loop expression")
+    self.vars_temp = match.group(1).split(",")
+    self.vars = [v.strip() for v in self.vars_temp]
+    #print self.vars
+    self.expression = match.group(2)
 
   def execute(self, stream, data):
-    remember_vars = {}
-    for var in self.vars:
-      if var in data:
-        remember_vars[var] = data[var]
+    remember_vars = {var: data[var] for var in self.vars if var in data}
     for list in eval(self.expression, globals(), data):
       if is_sequence(list):
         for index, value in enumerate(list):
@@ -206,26 +196,23 @@ class IfTemplateNode(TemplateNode):
     self.else_node = None
     TemplateNode.__init__(self, parent, s)
     match = re_if.match(s)
-    if match == None:
+    if match is None:
       raise self.parent.parser_exception(
-        "[[%s]] is not a valid if expression" % self.s)
+          f"[[{self.s}]] is not a valid if expression")
     else:
       self.expression = match.group(1)
 
   def add_node(self, node):
     if node == 'end':
       return 1
-    elif isinstance(node, ElseTemplateNode):
-      self.else_node = node
-      return 1
-    elif isinstance(node, ElifTemplateNode):
+    elif isinstance(node, (ElseTemplateNode, ElifTemplateNode)):
       self.else_node = node
       return 1
     elif node != None:
       self.node_list.append(node)
     else:
       raise self.parent.parser_exception(
-        "[[%s]] does not have a matching [[end]]" % self.s)
+          f"[[{self.s}]] does not have a matching [[end]]")
 
   def execute(self, stream, data):
     if eval(self.expression, globals(), data):
@@ -238,9 +225,8 @@ class ElifTemplateNode(IfTemplateNode):
     self.else_node = None
     TemplateNode.__init__(self, parent, s)
     match = re_elif.match(s)
-    if match == None:
-      self.parent.parser_exception(
-        "[[%s]] is not a valid elif expression" % self.s)
+    if match is None:
+      self.parent.parser_exception(f"[[{self.s}]] is not a valid elif expression")
     else:
       self.expression = match.group(1)
 
@@ -251,14 +237,12 @@ class FunctionTemplateNode(TemplateNode):
   def __init__(self, parent, s):
     TemplateNode.__init__(self, parent, s)
     match = re_def.match(s)
-    if match == None:
+    if match is None:
       self.parent.parser_exception(
-        "[[%s]] is not a valid function definition" % self.s)
+          f"[[{self.s}]] is not a valid function definition")
     self.function_name = match.group(1)
     self.vars_temp = match.group(2).split(",")
-    self.vars = []
-    for v in self.vars_temp:
-      self.vars.append(v.strip())
+    self.vars = [v.strip() for v in self.vars_temp]
     #print self.vars
     self.parent.functions[self.function_name] = self
 
@@ -284,7 +268,7 @@ class LeafTemplateNode(TemplateNode):
     stream.write(self.s)
 
   def __repr__(self):
-    return "<" + self.__class__.__name__ + ">"
+    return f"<{self.__class__.__name__}>"
 
 class CommentTemplateNode(LeafTemplateNode):
   def execute(self, stream, data):
@@ -301,9 +285,8 @@ class ExecTemplateNode(LeafTemplateNode):
   def __init__(self, parent, s):
     LeafTemplateNode.__init__(self, parent, s)
     match = re_exec.match(s)
-    if match == None:
-      self.parent.parser_exception(
-        "[[%s]] is not a valid statement" % self.s)
+    if match is None:
+      self.parent.parser_exception(f"[[{self.s}]] is not a valid statement")
     self.s = match.group(1)
 
   def execute(self, stream, data):
@@ -313,11 +296,10 @@ class CallTemplateNode(LeafTemplateNode):
   def __init__(self, parent, s):
     LeafTemplateNode.__init__(self, parent, s)
     match = re_call.match(s)
-    if match == None:
-      self.parent.parser_exception(
-        "[[%s]] is not a valid function call" % self.s)
+    if match is None:
+      self.parent.parser_exception(f"[[{self.s}]] is not a valid function call")
     self.function_name = match.group(1)
-    self.vars = "(" + match.group(2).strip() + ",)"
+    self.vars = f"({match.group(2).strip()},)"
 
   def execute(self, stream, data):
     self.parent.functions[self.function_name].call(
@@ -339,10 +321,10 @@ template_factory_types = template_factory_type_map.keys()
 def TemplateNodeFactory(parent):
   src = parent.parser_get()
 
-  if src == None:
+  if src is None:
     return None
   match = re_directive.search(src)
-  if match == None:
+  if match is None:
     parent.parser_eat(len(src))
     return LeafTemplateNode(parent, src)
   elif src == '' or match.start() != 0:
@@ -357,13 +339,13 @@ def TemplateNodeFactory(parent):
       return CommentTemplateNode(parent, directive)
     else:
       for i in template_factory_types:
-        if directive[0:len(i)] == i:
+        if directive[:len(i)] == i:
           return template_factory_type_map[i](parent, directive)
       return ExpressionTemplateNode(parent, directive)
 
 def is_sequence(object):
   try:
-    object[0:0]
+    object[:0]
   except:
     return False
   else:

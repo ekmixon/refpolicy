@@ -77,37 +77,31 @@ def getDefaultHomeDir():
 			homedir = rc[1].split("=")[1]
 			homedir = homedir.split("#")[0]
 			homedir = homedir.strip()
-			if not homedir in ret:
+			if homedir not in ret:
 				ret.append(homedir)
-		else:
-			#rc[0] == 1 means the file was there, we read it, but the grep didn't match
-			if rc[0] != 1:
-				sys.stderr.write("(%d): %s\n" % (rc[0], rc[1]))
-				sys.stderr.write("You do not have access to /etc/default/useradd HOME=\n")
-				sys.stderr.flush()
+		elif rc[0] != 1:
+			sys.stderr.write("(%d): %s\n" % (rc[0], rc[1]))
+			sys.stderr.write("You do not have access to /etc/default/useradd HOME=\n")
+			sys.stderr.flush()
 	if os.path.isfile('/etc/libuser.conf'):
 		rc=getstatusoutput("grep -h '^LU_HOMEDIRECTORY' /etc/libuser.conf")
 		if rc[0] == 0:
 			homedir = rc[1].split("=")[1]
 			homedir = homedir.split("#")[0]
 			homedir = homedir.strip()
-			if not homedir in ret:
+			if homedir not in ret:
 				ret.append(homedir)
-		else:
-			#rc[0] == 1 means the file was there, we read it, but the grep didn't match
-			if rc[0] != 1:
-				sys.stderr.write("(%d): %s\n" % (rc[0], rc[1]))
-				sys.stderr.write("You do not have access to /etc/libuser.conf LU_HOMEDIRECTORY=\n")
-				sys.stderr.flush()
-	if ret == []:
+		elif rc[0] != 1:
+			sys.stderr.write("(%d): %s\n" % (rc[0], rc[1]))
+			sys.stderr.write("You do not have access to /etc/libuser.conf LU_HOMEDIRECTORY=\n")
+			sys.stderr.flush()
+	if not ret:
 		ret.append("/home")
 	return ret
 
 def getSELinuxType(directory):
-	rc=getstatusoutput("grep ^SELINUXTYPE= %s/config" % directory)
-	if rc[0]==0:
-		return rc[1].split("=")[-1].strip()
-	return "targeted"
+	rc = getstatusoutput(f"grep ^SELINUXTYPE= {directory}/config")
+	return rc[1].split("=")[-1].strip() if rc[0]==0 else "targeted"
 
 def usage(error = ""):
 	if error != "":
@@ -121,7 +115,7 @@ def warning(warning = ""):
 	sys.stderr.flush()
 
 def errorExit(error):
-	sys.stderr.write("%s exiting for: " % sys.argv[0])
+	sys.stderr.write(f"{sys.argv[0]} exiting for: ")
 	sys.stderr.write("%s\n" % error)
 	sys.stderr.flush()
 	sys.exit(1)
@@ -129,24 +123,24 @@ def errorExit(error):
 class selinuxConfig:
 	def __init__(self, selinuxdir="/etc/selinux", setype="targeted", usepwd=1):
 		self.setype=setype
-		self.selinuxdir=selinuxdir +"/"
+		self.selinuxdir = f"{selinuxdir}/"
 		self.contextdir="/contexts"
-		self.filecontextdir=self.contextdir+"/files"
+		self.filecontextdir = f"{self.contextdir}/files"
 		self.usepwd=usepwd
 
 	def getFileContextDir(self):
 		return self.selinuxdir+self.setype+self.filecontextdir
 
 	def getFileContextFile(self):
-		return self.getFileContextDir()+"/file_contexts"
+		return f"{self.getFileContextDir()}/file_contexts"
 
 	def getHomeDirTemplate(self):
-		return self.getFileContextDir()+"/homedir_template"
+		return f"{self.getFileContextDir()}/homedir_template"
 
 	def getHomeRootContext(self, homedir):
 		rc=getstatusoutput("grep HOME_ROOT  %s | sed -e \"s|^HOME_ROOT|%s|\"" % ( self.getHomeDirTemplate(), homedir))
 		if rc[0] != 0:
-			errorExit("sed error (" + str(rc[0]) + "): " + rc[1])
+			errorExit(f"sed error ({str(rc[0])}): {rc[1]}")
 		return rc[1]+"\n"
 
 	def getUsersFile(self):
@@ -165,7 +159,7 @@ class selinuxConfig:
 		rc = getstatusoutput('grep "^user" %s' % self.getSystemUsersFile())
 		if rc[0] == 0:
 			users+=rc[1]+"\n"
-		rc = getstatusoutput("grep ^user %s" % self.getUsersFile())
+		rc = getstatusoutput(f"grep ^user {self.getUsersFile()}")
 		if rc[0] == 0:
 			users+=rc[1]
 		udict = {}
@@ -185,11 +179,7 @@ class selinuxConfig:
 					home = pwdentry[5]
 					if home == "/":
 						continue
-					prefs = {}
-					prefs["role"] = role
-					prefs["home"] = home
-					prefs["name"] = pwdentry[0]
-					prefs["uid"] = pwdentry[2]
+					prefs = {"role": role, "home": home, "name": pwdentry[0], "uid": pwdentry[2]}
 					udict[user[1]] = prefs
 				except KeyError:
 					sys.stderr.write("The user \"%s\" is not present in the passwd file, skipping...\n" % user[1])
@@ -205,15 +195,22 @@ class selinuxConfig:
 			" -e 's|%%{USERNAME}|%s|'"
 			% (self.getHomeDirTemplate(), home, role, seuser, userid, username))
 		if rc[0] != 0:
-			errorExit("sed error (" + str(rc[0]) + "): " + rc[1])
+			errorExit(f"sed error ({str(rc[0])}): {rc[1]}")
 		return ret + rc[1] + "\n"
 
 	def genHomeDirContext(self):
 		users = self.getUsers()
-		ret=""
-		# Fill in HOME and ROLE for users that are defined
-		for u in users:
-			ret += self.getHomeDirContext (u, users[u]["home"], users[u]["role"], users[u]["name"], users[u]["uid"])
+		ret = "".join(
+			self.getHomeDirContext(
+				u,
+				users[u]["home"],
+				users[u]["role"],
+				users[u]["name"],
+				users[u]["uid"],
+			)
+			for u in users
+		)
+
 		return ret+"\n"
 
 	def checkExists(self, home):
@@ -239,29 +236,29 @@ class selinuxConfig:
 			regex = re.sub(r"\.\*$", "", regex)
 			#strip a (/.*)? which matches anything trailing to a /*$ which matches trailing /'s
 			regex = re.sub(r"\(\/\.\*\)\?", "", regex)
-			regex = regex + "/*$"
+			regex = f"{regex}/*$"
 			if re.search(regex, home, 0):
 				exists = 0
 				break
-		if exists == 1:
-			return 1
-		return 0
+		return 1 if exists == 1 else 0
 
 
 	def getHomeDirs(self):
 		homedirs = []
-		homedirs = homedirs + getDefaultHomeDir()
+		homedirs += getDefaultHomeDir()
 		starting_uid=getStartingUID()
 		if self.usepwd==0:
 			return homedirs
 		ulist = pwd.getpwall()
 		for u in ulist:
-			if u[2] >= starting_uid and \
-					not u[6] in EXCLUDE_LOGINS and \
-					u[5] != "/" and \
-					u[5].count("/") > 1:
+			if (
+				u[2] >= starting_uid
+				and u[6] not in EXCLUDE_LOGINS
+				and u[5] != "/"
+				and u[5].count("/") > 1
+			):
 				homedir = u[5][:u[5].rfind("/")]
-				if not homedir in homedirs:
+				if homedir not in homedirs:
 					if self.checkExists(homedir)==0:
 						warning("%s is already defined in %s,\n%s will not create a new context." % (homedir, self.getFileContextFile(), sys.argv[0]))
 					else:
@@ -273,16 +270,18 @@ class selinuxConfig:
 	def genoutput(self):
 		ret= self.heading()
 		for h in self.getHomeDirs():
-			ret += self.getHomeDirContext ("user_u" , h+'/[^/]+', "user", "[^/]+", "[0-9]+")
+			ret += self.getHomeDirContext(
+				"user_u", f'{h}/[^/]+', "user", "[^/]+", "[0-9]+"
+			)
+
 			ret += self.getHomeRootContext(h)
 		ret += self.genHomeDirContext()
 		return ret
 
 	def write(self):
 		try:
-			fd = open(self.getFileContextDir()+"/file_contexts.homedirs", "w")
-			fd.write(self.genoutput())
-			fd.close()
+			with open(f"{self.getFileContextDir()}/file_contexts.homedirs", "w") as fd:
+				fd.write(self.genoutput())
 		except IOError as error:
 			sys.stderr.write("%s: %s\n" % ( sys.argv[0], error ))
 

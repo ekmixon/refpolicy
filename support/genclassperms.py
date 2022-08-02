@@ -42,64 +42,41 @@ def get_perms(name, av_db, common):
 	class file and common file).
 	"""
 
-	# Traverse through the access vector database and try to find the
-	#  object with the name passed.
-	for obj in av_db:
-		if obj.name == name and obj.common == common:
-			return obj.perms
-
-	return []
+	return next(
+		(obj.perms for obj in av_db if obj.name == name and obj.common == common),
+		[],
+	)
 
 def get_av_db(file_name):
 	"""
 	Returns an access vector database generated from the file file_name.
 	"""
-	# This function takes a file, reads the data, parses it and returns
-	#  a list of access vector classes.
-	# Reading into av_data:
-	#  The file specified will be read line by line. Each line will have
-	#   its comments removed. Once comments are removed, each 'word' (text
-	#   separated by whitespace) and braces will be split up into separate
-	#   strings and appended to the av_data list, in the order they were
-	#   read.
-	# Parsing av_data:
-	#  Parsing is done using a queue implementation of the av_data list.
-	#   Each time a word is used, it is dequeued afterwards. Each loop in
-	#   the while loop below will read in key words and dequeue expected
-	#   words and values. At the end of each loop, a Class containing the
-	#   name, permissions and whether it is a common or not will be appended
-	#   to the database. Lots of errors are caught here, almost all checking
-	#   if a token is expected but EOF is reached.
-	# Now the list of Class objects is returned.
+	with open(file_name, "r") as av_file:
+		av_data = []
+		# Read the file and strip out comments on the way.
+		# At the end of the loop, av_data will contain a list of individual
+		#  words. i.e. ['common', 'file', '{', ...]. All comments and whitespace
+		#  will be gone.
+		while True:
+			av_line = av_file.readline()
 
-	av_file = open(file_name, "r")
-	av_data = []
-	# Read the file and strip out comments on the way.
-	# At the end of the loop, av_data will contain a list of individual
-	#  words. i.e. ['common', 'file', '{', ...]. All comments and whitespace
-	#  will be gone.
-	while True:
-		av_line = av_file.readline()
+			# If EOF has been reached:
+			if not av_line:
+				break
 
-		# If EOF has been reached:
-		if not av_line:
-			break
+			# Check if there is a comment, and if there is, remove it.
+			comment_index = av_line.find("#")
+			if comment_index != -1:
+				av_line = av_line[:comment_index]
 
-		# Check if there is a comment, and if there is, remove it.
-		comment_index = av_line.find("#")
-		if comment_index != -1:
-			av_line = av_line[:comment_index]
+			# Pad the braces with whitespace so that they are split into
+			#  their own word. It doesn't matter if there will be extra
+			#  white space, it'll get thrown away when the string is split.
+			av_line.replace("{"," { ")
+			av_line.replace("}"," } ")
 
-		# Pad the braces with whitespace so that they are split into
-		#  their own word. It doesn't matter if there will be extra
-		#  white space, it'll get thrown away when the string is split.
-		av_line.replace("{"," { ")
-		av_line.replace("}"," } ")
-
-		# Split up the words on the line and add it to av_data.
-		av_data += av_line.split()
-
-	av_file.close()
+			# Split up the words on the line and add it to av_data.
+			av_data += av_line.split()
 
 	# Parsing the file:
 	# The implementation of this parse is a queue. We use the list of words
@@ -125,14 +102,13 @@ def get_av_db(file_name):
 			common = True
 			keyword = "common"
 		else:
-			error("Unexpected token in file " + file_name + ": "\
-				+ av_data[0] + ".")
+			error(((f"Unexpected token in file {file_name}: " + av_data[0]) + "."))
 
 		# Dequeue the "class" or "common" key word.
 		av_data = av_data[1:]
 
 		if len(av_data) == 0:
-			error("Missing token in file " + file_name + ".")
+			error(f"Missing token in file {file_name}.")
 
 		# Get and dequeue the name of the class or common.
 		name = av_data[0]
@@ -144,7 +120,7 @@ def get_av_db(file_name):
 		#  classes inherit:
 		if common == False:
 			if len(av_data) == 0:
-				error("Missing token in file " + file_name + ".")
+				error(f"Missing token in file {file_name}.")
 
 			# If the class inherits from something else:
 			if av_data[0] == "inherits":
@@ -199,11 +175,8 @@ def get_sc_db(file_name):
 	Returns a security class database generated from the file file_name.
 	"""
 
-	# Read the file then close it.
-	sc_file = open(file_name)
-	sc_data = sc_file.readlines()
-	sc_file.close()
-
+	with open(file_name) as sc_file:
+		sc_data = sc_file.readlines()
 	# For each line in the security classes file, add the name of the class
 	#  and whether it is a userspace class or not to the security class
 	#  database.
@@ -217,17 +190,17 @@ def get_sc_db(file_name):
 		# Check if the comment to the right of the permission matches
 		#  USERSPACE_CLASS.
 		comment_index = line.find("#")
-		if comment_index != -1 and line[comment_index+1:].strip() == USERSPACE_CLASS:
-			userspace = True
-		else:
-			userspace = False
+		userspace = (
+			comment_index != -1
+			and line[comment_index + 1 :].strip() == USERSPACE_CLASS
+		)
 
 		# All lines should be in the format "class NAME", meaning
 		#  it should have two tokens and the first token should be
 		#  "class".
 		split_line = line.split()
 		if len(split_line) < 2 or split_line[0] != "class":
-			error("Wrong syntax: " + line)
+			error(f"Wrong syntax: {line}")
 
 		# Add the class's name (split_line[1]) and whether it is a
 		#  userspace class or not to the database.
@@ -259,10 +232,7 @@ def gen_class_perms(av_db, sc_db):
 
 		# Merge all the permissions into one string with one space
 		#  padding.
-		perm_str = ""
-		for perm in perms:
-			perm_str += perm + " "
-
+		perm_str = "".join(f"{perm} " for perm in perms)
 		# Add the line to the class_perms
 		class_perms += class_perms_line % (obj.name, perm_str)
 	class_perms += "\n"
@@ -289,7 +259,7 @@ def error(error):
 	Print an error message and exit.
 	"""
 
-	sys.stderr.write("%s exiting for: " % sys.argv[0])
+	sys.stderr.write(f"{sys.argv[0]} exiting for: ")
 	sys.stderr.write("%s\n" % error)
 	sys.stderr.flush()
 	sys.exit(1)

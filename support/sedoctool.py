@@ -36,7 +36,7 @@ def read_policy_xml(filename):
 	try:
 		xml_fh = open(filename)
 	except:
-		error("error opening " + filename)
+		error(f"error opening {filename}")
 
 	try:
 		doc = parseString(xml_fh.read())
@@ -145,29 +145,32 @@ def gen_module_conf(doc, file_name, namevalue_list):
 				file_name.write("#\n")
 
 			for desc in node.getElementsByTagName("summary"):
-				if not desc.parentNode == node:
+				if desc.parentNode != node:
 					continue
 				s = format_txt_desc(desc).split("\n")
 				for line in s:
 					file_name.write("# %s\n" % line)
 
 				# If the module is set as disabled.
-				if [mod_name, MOD_DISABLED] in namevalue_list:
-					file_name.write("%s = %s\n\n" % (mod_name, MOD_DISABLED))
-				# If the module is set as enabled.
-				elif [mod_name, MOD_ENABLED] in namevalue_list:
-					file_name.write("%s = %s\n\n" % (mod_name, MOD_ENABLED))
-				# If the module is set as base.
-				elif [mod_name, MOD_BASE] in namevalue_list:
+				if (
+					[mod_name, MOD_DISABLED] not in namevalue_list
+					and [mod_name, MOD_ENABLED] not in namevalue_list
+					and [mod_name, MOD_BASE] not in namevalue_list
+					and mod_req
+					or [mod_name, MOD_DISABLED] not in namevalue_list
+					and [mod_name, MOD_ENABLED] not in namevalue_list
+					and [mod_name, MOD_BASE] in namevalue_list
+				):
 					file_name.write("%s = %s\n\n" % (mod_name, MOD_BASE))
-				# If the module is a new module.
+				elif (
+					[mod_name, MOD_DISABLED] not in namevalue_list
+					and [mod_name, MOD_ENABLED] not in namevalue_list
+					or [mod_name, MOD_DISABLED] not in namevalue_list
+				):
+					file_name.write("%s = %s\n\n" % (mod_name, MOD_ENABLED))
+
 				else:
-					# Set the module to base if it is marked as required.
-					if mod_req:
-						file_name.write("%s = %s\n\n" % (mod_name, MOD_BASE))
-					# Set the module to enabled if it is not required.
-					else:
-						file_name.write("%s = %s\n\n" % (mod_name, MOD_ENABLED))
+					file_name.write("%s = %s\n\n" % (mod_name, MOD_DISABLED))
 
 def get_conf(conf):
 	"""
@@ -178,7 +181,7 @@ def get_conf(conf):
 	conf_lines = conf.readlines()
 
 	namevalue_list = []
-	for i in range(0,len(conf_lines)):
+	for i in range(len(conf_lines)):
 		line = conf_lines[i]
 		if line.strip() != '' and line.strip()[0] != "#":
 			namevalue = line.strip().split("=")
@@ -247,7 +250,7 @@ def gen_doc_menu(mod_layer, module_list):
 	for layer, value in module_list.items():
 		cur_menu = (layer, [])
 		menu.append(cur_menu)
-		if layer != mod_layer and mod_layer != None:
+		if layer != mod_layer != None:
 			continue
 		#we are in our layer so fill in the other modules or we want them all
 		for mod, desc in value.items():
@@ -268,13 +271,14 @@ def format_html_desc(node):
 		if desc.nodeName == "#text":
 			if desc.data:
 				if desc.parentNode.nodeName != "p":
-					desc_buf += "<p>" + desc.data + "</p>"
+					desc_buf += f"<p>{desc.data}</p>"
 				else:
 					desc_buf += desc.data
 		else:
-			desc_buf += "<" + desc.nodeName + ">" \
-				 + format_html_desc(desc) \
-				 + "</" + desc.nodeName +">"
+			desc_buf += (
+				((f"<{desc.nodeName}>" + format_html_desc(desc)) + "</") + desc.nodeName
+			) + ">"
+
 
 	return desc_buf
 

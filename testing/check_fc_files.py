@@ -97,11 +97,9 @@ def analyze_fc_file(fc_path):
 
             # Check the SELinux context
             if context != NONE_CONTEXT:
-                matches = re.match(r'^gen_context\((\S*), ?(\S*)\)$', context)
-                if not matches:
-                    print(f"{prefix}unknown SELinux context format for {path}: {context}")
-                    retval = False
-                else:
+                if matches := re.match(
+                    r'^gen_context\((\S*), ?(\S*)\)$', context
+                ):
                     context_label, context_mls = matches.groups()
                     if not context_label.startswith('system_u:object_r:'):
                         print(f"{prefix}SELinux context does not begin with 'system_u:object_r:' for {path}: {context}")  # noqa
@@ -113,6 +111,9 @@ def analyze_fc_file(fc_path):
                         print(f"{prefix}SELinux context uses an unexpected MLS label for {path}: {context_mls} (in {context})")  # noqa
                         retval = False
 
+                else:
+                    print(f"{prefix}unknown SELinux context format for {path}: {context}")
+                    retval = False
             # Find obviously-wrong patterns
             if '(.*)?' in path:
                 # As (.*) can match the empty string, the question mark is redundant
@@ -151,9 +152,11 @@ def analyze_fc_file(fc_path):
             reduced_path = reduced_path.replace("inde(x)(", 'index(')
             reduced_path = reduced_path.replace("include`'(", 'include(')
 
-            # Check the character set of the path
-            invalid_characters = set(re.findall(r'[^-0-9A-Za-z_@./()?+*%{}\[\]^|:~\\]', reduced_path))
-            if invalid_characters:
+            if invalid_characters := set(
+                re.findall(
+                    r'[^-0-9A-Za-z_@./()?+*%{}\[\]^|:~\\]', reduced_path
+                )
+            ):
                 print(f"{prefix}unexpected characters {' '.join(sorted(invalid_characters))} in {path}")
                 retval = False
 
@@ -246,13 +249,16 @@ def analyze_fc_file(fc_path):
 
             # If the reduced path still ends with a special character, something went wrong.
             # Instead of guessing the possible buggy characters, list the allowed ones.
-            if reduced_path and not re.match(r'[-0-9A-Za-z_@\]~·†∞]', reduced_path[-1]):
-                if path != '/':
-                    if reduced_path == path:
-                        print(f"{prefix}unexpected end of file pattern for {path}")
-                    else:
-                        print(f"{prefix}unexpected end of file pattern for {path} after being reduced to {reduced_path}")  # noqa
-                    retval = False
+            if (
+                reduced_path
+                and not re.match(r'[-0-9A-Za-z_@\]~·†∞]', reduced_path[-1])
+                and path != '/'
+            ):
+                if reduced_path == path:
+                    print(f"{prefix}unexpected end of file pattern for {path}")
+                else:
+                    print(f"{prefix}unexpected end of file pattern for {path} after being reduced to {reduced_path}")  # noqa
+                retval = False
 
             # Now remove and replace some matching patterns from the path, in order to catch invalid characters
             reduced_path = reduced_path.replace('(-.*)?', '')

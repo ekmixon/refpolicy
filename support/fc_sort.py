@@ -101,20 +101,16 @@ class FileContext():
         # Check to see if either a or b has a specified type and the other doesn't
         if not a.file_type and b.file_type:
             return -1
-        if not b.file_type and a.file_type:
-            return 1
-
-        # If none of the above conditions were satisfied, then a and b are equally specific
-        return 0
+        return 1 if not b.file_type and a.file_type else 0
 
     def __lt__(self, other):
         return self._compare(self, other) == -1
 
     def __str__(self):
         if self.file_type:
-            return '{}\t\t{}\t{}'.format(self.path, self.file_type, self.context)
+            return f'{self.path}\t\t{self.file_type}\t{self.context}'
         else:
-            return '{}\t\t{}'.format(self.path, self.context)
+            return f'{self.path}\t\t{self.context}'
 
 
 if __name__ == '__main__':
